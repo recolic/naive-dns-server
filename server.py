@@ -3,29 +3,29 @@ import sys
 import threading
 import socketserver
 from dnslib import *
+import fnmatch
 
-listen_addr = '0.0.0.0'
-listen_port = 53
-
-conf = """
-# Note: Use SPACE character to split columns.
-#       DO NOT use TAB character. It's not allowed.
-# hostname        TYPE   TTL    VALUE
-example.com.       A     60   1.1.1.1
-example.com.       A     60   1.0.0.1
-example.com.       AAAA  60   2606:4700:30::681b:90e6
-# TXT record: DO NOT add the double quote `""`.
-example.com.       TXT   120  fuck you
-example.com.       TXT   120  v=spf -all
-example.com.       NS    120  l.example.com.
-b.example.com.     A     60   2.2.2.2
-l.example.com.     A     60   127.0.0.1
-mail.example.com.  MX    300  5,b.example.com
-mail.example.com.  MX    300  10,l.example.com
-f.example.com.     CNAME 30   b.example.com
-"""
+####### Example configuration
+#conf = """
+## Note: Use SPACE character to split columns.
+##       DO NOT use TAB character. It's not allowed.
+## hostname        TYPE   TTL    VALUE
+#example.com.       A     60   1.1.1.1
+#example.com.       A     60   1.0.0.1
+#example.com.       AAAA  60   2606:4700:30::681b:90e6
+## TXT record: DO NOT add the double quote `""`.
+#example.com.       TXT   120  fuck you
+#example.com.       TXT   120  v=spf -all
+#example.com.       NS    120  l.example.com.
+#b.example.com.     A     60   2.2.2.2
+#l.example.com.     A     60   127.0.0.1
+#mail.example.com.  MX    300  5,b.example.com
+#mail.example.com.  MX    300  10,l.example.com
+#f.example.com.     CNAME 30   b.example.com
+#"""
 
 records = {}
+wildcard_records = []
 
 def _line_to_arr(line):
     line_backup = line
@@ -85,20 +85,26 @@ def _record_type_to_typecode(record_type):
  
         
         
-def init():
+def init(conf):
     global records
     for line in conf.split('\n'):
         record = _line_to_arr(line)
         if record == []:
             continue
 
-        if record[0] not in records:
-            records[record[0]] = []
-        
+        record_hostname = record[0]
         record_type = record[1]
         record_data = _record_type_construct_data(record_type, record[3])
-       
-        records[record[0]].append([record[0], record[1], int(record[2]), record_data])
+
+        good_record = [record[0], record[1], int(record[2]), record_data]
+        if '*' in record_hostname or '?' in record_hostname:
+            # wildcard domain
+            wildcard_records.append(good_record)
+        else:
+            # non-wildcard normal domain
+            if record_hostname not in records:
+                records[record_hostname] = []
+            records[record_hostname].append(good_record)
 
 
 def dns_response(data):
@@ -113,35 +119,36 @@ def dns_response(data):
 
     print('QUERY>', query_domain, query_type)
 
+    found = False
     if query_domain in records:
         for record in records[query_domain]:
             record_type, record_ttl, record_data = record[1:]
             ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
-            record_match = False
+            if query_type == record_type or query_type == 'ALL' or query_type == '*' or query_type == 'ANY' or record_type == 'CNAME':
+                found = True
+                reply.add_answer(ans)
+
+    if not found:
+        # Lookup wildcard domains.
+        for record in wildcard_records:
+            if not fnmatch.fnmatch(query_domain, record[0]):
+                continue
+            record_type, record_ttl, record_data = record[1:]
+            ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
             if query_type == record_type or query_type == 'ALL' or query_type == '*' or query_type == 'ANY' or record_type == 'CNAME':
                 reply.add_answer(ans)
+                break # Only add the first matched wildcard answer.
 
     return reply.pack()
 
 
 class BaseRequestHandler(socketserver.BaseRequestHandler):
-
-    def get_data(self):
-        raise NotImplementedError
-
-    def send_data(self, data):
-        raise NotImplementedError
-
     def handle(self):
-#        now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-#        print("\n\n%s request %s (%s %s):" % (self.__class__.__name__[:3], now, self.client_address[0],
-#                                               self.client_address[1]))
         try:
             data = self.get_data()
             self.send_data(dns_response(data))
-        except Exception:
-            traceback.print_exc(file=sys.stderr)
-
+        except Exception as e:
+            print('Exception:', e)
 
 class TCPRequestHandler(BaseRequestHandler):
     def get_data(self):
@@ -153,25 +160,34 @@ class TCPRequestHandler(BaseRequestHandler):
         elif sz > len(data) - 2:
             raise Exception("Too big TCP packet")
         return data[2:]
-
     def send_data(self, data):
         #return self.request.sendall(data)
         sz = bytes.fromhex(hex(len(data))[2:].zfill(4))
         return self.request.sendall(sz + data)
 
-
 class UDPRequestHandler(BaseRequestHandler):
-
     def get_data(self):
         return self.request[0] # .strip()
-
     def send_data(self, data):
         return self.request[1].sendto(data, self.client_address)
 
 
 if __name__ == '__main__':
-    print('Reading records...')
-    init()
+    if len(sys.argv) != 3:
+        print('Usage: ./this.py <ListenAddr> <ConfigFile>')
+        print('Example: ./this.py 0.0.0.0:53 /etc/dns.py.conf')
+        exit(1)
+    
+    print('Reading config...')
+    listen, configFile = sys.argv[1], sys.argv[2]
+    ar = listen.split(':')
+    if len(ar) != 2:
+        raise RuntimeError("Invalid listen address " + listen)
+    listen_addr, listen_port = ar[0], int(ar[1])
+
+    with open(configFile, "r") as f:
+        init(f.read())
+
     print("Starting nameserver...")
 
     servers = [
@@ -182,7 +198,7 @@ if __name__ == '__main__':
         thread = threading.Thread(target=s.serve_forever)  # that thread will start one more thread for each request
         thread.daemon = True  # exit the server thread when the main thread terminates
         thread.start()
-        print("%s server loop running in thread: %s" % (s.RequestHandlerClass.__name__[:3], thread.name))
+        print('Listening TCP & UDP ', s.server_address)
 
     try:
         while 1:
