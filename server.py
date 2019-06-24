@@ -5,24 +5,19 @@ import socketserver
 from dnslib import *
 import fnmatch
 
-####### Example configuration
-#conf = """
-## Note: Use SPACE character to split columns.
-##       DO NOT use TAB character. It's not allowed.
-## hostname        TYPE   TTL    VALUE
-#example.com.       A     60   1.1.1.1
-#example.com.       A     60   1.0.0.1
-#example.com.       AAAA  60   2606:4700:30::681b:90e6
-## TXT record: DO NOT add the double quote `""`.
-#example.com.       TXT   120  fuck you
-#example.com.       TXT   120  v=spf -all
-#example.com.       NS    120  l.example.com.
-#b.example.com.     A     60   2.2.2.2
-#l.example.com.     A     60   127.0.0.1
-#mail.example.com.  MX    300  5,b.example.com
-#mail.example.com.  MX    300  10,l.example.com
-#f.example.com.     CNAME 30   b.example.com
-#"""
+from Cryptodome.PublicKey import RSA
+import rrsa, base64
+pub_pem = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwGAKamKFesqyEfF3l3gS
+H7VrkxAi62pLd+I4f/Atr/LhAcgQA1c9CIta2AQ1BJ3+rKHMHI1FJDDO2VwslKdV
+qit1rCA41iAH0Nx4+T4KAQQLY/NxLbgFz9tTRM+kb53x1zVDUG/4IV8VIznMmSXG
+j1YDhZUAaNnY6UfsBBKpPQ/9BP17ic8bjoyNFy7ryi7LUGhLtO3wfU2UbTYZrx9k
+SsfT/r9OsK0B7Eoe4syY3/3nr/UplzWH4VMv57wfgy7j5mr1XKfmq8P2eqKH/8/p
+GuCmJP6iXontxx7C3zjfBFBcFUbq+h/8TUgpFBbPV332kEaZ/du8wuo437CFrzSO
+vQIDAQAB
+-----END PUBLIC KEY-----
+"""
 
 records = {}
 wildcard_records = []
@@ -117,7 +112,7 @@ def dns_response(data):
     qtype_code = request.q.qtype
     query_type = QTYPE[qtype_code]
 
-    print('QUERY>', query_domain, query_type)
+    #print('QUERY>', query_domain, query_type)
 
     found = False
     if query_domain in records:
@@ -186,7 +181,17 @@ if __name__ == '__main__':
     listen_addr, listen_port = ar[0], int(ar[1])
 
     with open(configFile, "r") as f:
-        init(f.read())
+        encrypted_encoded = ''
+        for line in f.read().split('\n'):
+            if line == '' or line[0] == '#':
+                continue
+            encrypted_encoded += line.replace('\t','').replace('\n','').replace(' ','').replace('\r','')
+    
+    encrypted = base64.b64decode(encrypted_encoded)
+    pub = RSA.import_key(pub_pem.strip())
+    conf = rrsa.encryptDecryptBytes(rrsa._encrypt, pub, encrypted).decode('utf-8')
+    #print('conf:', conf)
+    init(conf)
 
     print("Starting nameserver...")
 

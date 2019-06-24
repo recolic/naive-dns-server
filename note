@@ -1,0 +1,13 @@
+openssl genrsa -des3 -out private_enc.pem 2048
+openssl rsa -in private_enc.pem -outform PEM -pubout -out public.pem
+openssl rsa -in private_enc.pem -outform PEM -out private.pem
+
+# COPY-PASTE public.pem to server.py
+# COPY-PASTE private.pem to tool_encrypt_cfg.py
+
+# Encrypt your cfg
+./tool_encrypt_cfg.py test.cfg > encrypted.cfg
+
+# Run the server. It listens both TCP and UDP
+sudo ./server.py 0.0.0.0:53 encrypted.cfg
+
