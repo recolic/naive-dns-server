@@ -4,7 +4,7 @@ CYTHON ?= cython
 .PHONY: server.c tool_encrypt_cfg.c
 
 all: server.c tool_encrypt_cfg.c
-	eval $(CC) server.c tool_encrypt_cfg.c -o server `python3-config --cflags --ldflags`
+	eval $(CC) server.c tool_encrypt_cfg.c -o server -fPIC `python3-config --cflags --ldflags`
 
 tool_encrypt_cfg.c:
 	$(CYTHON) -3 tool_encrypt_cfg.py
