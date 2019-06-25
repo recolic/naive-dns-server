@@ -1,15 +1,16 @@
 CC ?= gcc
+CYTHON ?= cython
 
 .PHONY: server.c tool_encrypt_cfg.c
 
 all: server.c tool_encrypt_cfg.c
-	eval $(CC) `python-config --cflags --ldflags` server.c tool_encrypt_cfg.c -o server
+	eval $(CC) server.c tool_encrypt_cfg.c -o server `python3-config --cflags --ldflags`
 
 tool_encrypt_cfg.c:
-	cython -3 tool_encrypt_cfg.py
+	$(CYTHON) -3 tool_encrypt_cfg.py
 
 server.c:
-	cython -3 --embed server.py
+	$(CYTHON) -3 --embed server.py
 
 clean:
 	rm -f server.c tool_encrypt_cfg.c server

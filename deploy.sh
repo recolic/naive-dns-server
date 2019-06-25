@@ -1,7 +1,8 @@
 #!/bin/bash
 
-git_archive_url="https://cdn.example.com/dns-server.tar.gz"
-conf_url="https://cdn.example.com/encrypted.cfg"
+git_archive_url="https://cnm.cool/tmp/dns-server.tar.gz"
+conf_url="https://cnm.cool/tmp/encrypted.cfg"
+use_cython=1
 
 function naive_check_os () {
     [[ -e /etc/fedora-release ]] && echo 'fedora' && return 0
@@ -15,23 +16,29 @@ function naive_check_os () {
 }
 
 os=$(naive_check_os)
-python3="/usr/bin/python3"
-pip3="/usr/bin/pip3"
+prefix=""
 
 # prepare
-[[ $os = 'ubuntu' ]] || [[ $os = 'debian' ]] && apt update && apt install -y gcc make libssl-dev openssl wget python3 python3-pip
+[[ $os = 'ubuntu' ]] || [[ $os = 'debian' ]] && apt update && apt install -y gcc make libssl-dev openssl wget python3 python3-pip python3-dev
 [[ $os = 'centos' ]] && yum install -y gcc make openssl-devel wget centos-release-scl &&
-    yum install -y rh-python36-python rh-python36-python-pip &&
-    python3="/opt/rh/rh-python36/root/usr/bin/python3" && pip3="/opt/rh/rh-python36/root/usr/bin/pip3"
+    yum install -y rh-python36-python rh-python36-python-pip rh-python36-scldevel rh-python36-python-devel &&
+    prefix="/opt/rh/rh-python36/root/" &&
+    extra_systemd_line="Environment=\"LD_LIBRARY_PATH=$prefix/usr/lib64/\""
 [[ $os = 'archlinux' ]] && pacman -Sy --noconfirm gcc make openssl wget python python-pip
 [[ $os = 'fedora' ]] && dnf install -y gcc make openssl openssl-devel wget python python-pip
 
-rm -rf dns-server
-"$pip3" install pyOpenSSL dnslib pycryptodome pycryptodomex || exit 2
+python3="$prefix/usr/bin/python3"
+pip3="$prefix/usr/bin/pip3"
+
+rm -rf dns-server /opt/dns-server
+"$pip3" install pyOpenSSL dnslib pycryptodome pycryptodomex Cython || exit 2
 
 wget "$git_archive_url" -O dns-server.tar.gz &&
     tar xvzf dns-server.tar.gz &&
     mv dns-server /opt &&
+    cd /opt/dns-server &&
+    PATH="$PATH:$prefix/usr/bin/" make &&
+    cd - &&
     echo dns-server installtion done, at /opt/dns-server. ||
     exit $?
 
@@ -40,13 +47,20 @@ wget "$conf_url" -O dns-server.conf &&
     echo configuration installation done, at /opt/dns-server/dns-server.conf. ||
     exit $?
 
+if [[ $use_cython = 1 ]]; then
+    server_exe="/opt/dns-server/server"
+else
+    server_exe="$python3 /opt/dns-server/server.py"
+fi
+
 echo "
 [Unit]
 Description=DNS Server Service
 
 [Service]
 TimeoutStartSec=0
-ExecStart=$python3 /opt/dns-server/server.py 0.0.0.0:53 /opt/dns-server/dns-server.conf
+ExecStart=$server_exe 0.0.0.0:53 /opt/dns-server/dns-server.conf
+$extra_systemd_line
 
 [Install]
 WantedBy=multi-user.target
