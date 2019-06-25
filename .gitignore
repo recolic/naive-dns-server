@@ -1,2 +1,5 @@
 *.so
 __pycache__
+server
+server.c
+tool_encrypt_cfg.c
