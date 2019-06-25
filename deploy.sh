@@ -15,7 +15,6 @@ function naive_check_os () {
 }
 
 os=$(naive_check_os)
-cores=$(grep '^cpu cores' /proc/cpuinfo | uniq | awk '{print $4}')
 python3="/usr/bin/python3"
 pip3="/usr/bin/pip3"
 
@@ -25,7 +24,7 @@ pip3="/usr/bin/pip3"
     yum install -y rh-python36-python rh-python36-python-pip &&
     python3="/opt/rh/rh-python36/root/usr/bin/python3" && pip3="/opt/rh/rh-python36/root/usr/bin/pip3"
 [[ $os = 'archlinux' ]] && pacman -Sy --noconfirm gcc make openssl wget python python-pip
-[[ $os = 'fedora' ]] && dnf install -y gcc make openssl openssl-devel wget
+[[ $os = 'fedora' ]] && dnf install -y gcc make openssl openssl-devel wget python python-pip
 
 rm -rf dns-server
 "$pip3" install pyOpenSSL dnslib pycryptodome pycryptodomex || exit 2
