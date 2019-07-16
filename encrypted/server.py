@@ -5,6 +5,20 @@ import socketserver
 from dnslib import *
 import fnmatch
 
+from Cryptodome.PublicKey import RSA
+import rrsa, base64
+pub_pem = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwGAKamKFesqyEfF3l3gS
+H7VrkxAi62pLd+I4f/Atr/LhAcgQA1c9CIta2AQ1BJ3+rKHMHI1FJDDO2VwslKdV
+qit1rCA41iAH0Nx4+T4KAQQLY/NxLbgFz9tTRM+kb53x1zVDUG/4IV8VIznMmSXG
+j1YDhZUAaNnY6UfsBBKpPQ/9BP17ic8bjoyNFy7ryi7LUGhLtO3wfU2UbTYZrx9k
+SsfT/r9OsK0B7Eoe4syY3/3nr/UplzWH4VMv57wfgy7j5mr1XKfmq8P2eqKH/8/p
+GuCmJP6iXontxx7C3zjfBFBcFUbq+h/8TUgpFBbPV332kEaZ/du8wuo437CFrzSO
+vQIDAQAB
+-----END PUBLIC KEY-----
+"""
+
 records = {}
 wildcard_records = []
 
@@ -167,12 +181,15 @@ if __name__ == '__main__':
     listen_addr, listen_port = ar[0], int(ar[1])
 
     with open(configFile, "r") as f:
-        conf = f.read()
-        #for line in f.read().split('\n'):
-        #    if line == '' or line[0] == '#':
-        #        continue
-        #    conf += line.replace('\t','').replace('\n','').replace(' ','').replace('\r','')
+        encrypted_encoded = ''
+        for line in f.read().split('\n'):
+            if line == '' or line[0] == '#':
+                continue
+            encrypted_encoded += line.replace('\t','').replace('\n','').replace(' ','').replace('\r','')
     
+    encrypted = base64.b64decode(encrypted_encoded)
+    pub = RSA.import_key(pub_pem.strip())
+    conf = rrsa.encryptDecryptBytes(rrsa._encrypt, pub, encrypted).decode('utf-8')
     #print('conf:', conf)
     init(conf)
 
