@@ -25,19 +25,7 @@ f.example.com.     CNAME 30   b.example.com
 *.b.example.com.   AAAA  60   ::1
 ?.example.com.     A     120  6.6.8.8
 *.example.com.     A     60   8.8.8.8
-*                  A     30   112.112.221.221
-*                  TXT   30   default txt reply
+*.com.             TXT   30   default txt reply for com
+*                  PASS  PASS 8.8.8.8
 ```
-
-## TODO
-
-Support upstream dns server.
-
-```
-example.com.     A     60   122.133.144.123
-# upstream dns server
-*.example.com.   PASS  300  8.8.8.8
-*                PASS  PASS 114.114.114.114
-```
-
 

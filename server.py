@@ -5,6 +5,9 @@ import socketserver
 from dnslib import *
 import fnmatch
 
+# This is just a magic placeholder number. Have no effect.
+RECORD_TTL_PASS = -1
+
 records = {}
 wildcard_records = []
 
@@ -44,6 +47,8 @@ def _record_type_construct_data(record_type, data_string):
         raise RuntimeError("SOA record not supported. Please add money if you want it.")
     elif record_type == 'CERT':
         raise RuntimeError("CERT record not supported. Please add money if you want it.")
+    elif record_type == 'PASS':
+        return data_string # upstream server addr
     else:
         raise RuntimeError("Unknown record type " + record_type)
 def _record_type_to_typecode(record_type):
@@ -63,8 +68,8 @@ def _record_type_to_typecode(record_type):
         return _m[record_type]
     else:
         raise RuntimeError("Unknown record type " + record_type)
- 
         
+
         
 def init(conf):
     global records
@@ -76,8 +81,10 @@ def init(conf):
         record_hostname = record[0]
         record_type = record[1]
         record_data = _record_type_construct_data(record_type, record[3])
+        record_ttl = int(record[2]) if record[2] != 'PASS' else RECORD_TTL_PASS
 
-        good_record = [record[0], record[1], int(record[2]), record_data]
+        good_record = [record[0], record[1], record_ttl, record_data]
+
         if '*' in record_hostname or '?' in record_hostname:
             # wildcard domain
             wildcard_records.append(good_record)
@@ -104,7 +111,12 @@ def dns_response(data):
     if query_domain in records:
         for record in records[query_domain]:
             record_type, record_ttl, record_data = record[1:]
-            ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
+
+            if record_type == 'PASS':
+                return request.send(record_data) # record_data == upstream_addr
+            else:
+                ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
+
             if query_type == record_type or query_type == 'ALL' or query_type == '*' or query_type == 'ANY' or record_type == 'CNAME':
                 found = True
                 reply.add_answer(ans)
@@ -115,7 +127,12 @@ def dns_response(data):
             if not fnmatch.fnmatch(query_domain, record[0]):
                 continue
             record_type, record_ttl, record_data = record[1:]
-            ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
+
+            if record_type == 'PASS':
+                return request.send(record_data) # record_data == upstream_addr
+            else:
+                ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
+
             if query_type == record_type or query_type == 'ALL' or query_type == '*' or query_type == 'ANY' or record_type == 'CNAME':
                 reply.add_answer(ans)
                 break # Only add the first matched wildcard answer.
