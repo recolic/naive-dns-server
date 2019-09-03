@@ -26,6 +26,7 @@ f.example.com.     CNAME 30   b.example.com
 ?.example.com.     A     120  6.6.8.8
 *.example.com.     A     60   8.8.8.8
 *.com.             TXT   30   default txt reply for com
+*.localhost.ns.    PASS  PASS 127.0.0.1@5353
 *                  PASS  PASS 8.8.8.8
 ```
 

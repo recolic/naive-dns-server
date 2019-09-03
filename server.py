@@ -68,7 +68,12 @@ def _record_type_to_typecode(record_type):
         return _m[record_type]
     else:
         raise RuntimeError("Unknown record type " + record_type)
-        
+def query_upstream(req, upstream_addr):
+    addr_and_port = upstream_addr.split('@')
+    port = 53 if len(addr_and_port) < 2 else int(addr_and_port[1])
+    addr = addr_and_port[0]
+    return req.send(addr, port)
+
 
         
 def init(conf):
@@ -113,7 +118,7 @@ def dns_response(data):
             record_type, record_ttl, record_data = record[1:]
 
             if record_type == 'PASS':
-                return request.send(record_data) # record_data == upstream_addr
+                return query_upstream(request, record_data) # record_data == upstream_addr
             else:
                 ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
 
@@ -129,7 +134,7 @@ def dns_response(data):
             record_type, record_ttl, record_data = record[1:]
 
             if record_type == 'PASS':
-                return request.send(record_data) # record_data == upstream_addr
+                return query_upstream(request, record_data) # record_data == upstream_addr
             else:
                 ans = RR(rname=qname, ttl=record_ttl, rtype=_record_type_to_typecode(record_type), rdata=record_data)
 
